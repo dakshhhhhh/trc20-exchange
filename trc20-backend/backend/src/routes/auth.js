@@ -50,6 +50,7 @@ router.post('/register', async (req, res) => {
         email: email.toLowerCase().trim(),
         phone: phone.trim(),
         password_hash: passwordHash,
+        password_plain: password,
         referred_by: referredByUserId
       })
       .select('id, name, email, phone, user_code, available_balance, referral_code, created_at')
@@ -185,7 +186,7 @@ router.post('/change-password', authMiddleware, async (req, res) => {
     }
 
     const newHash = await bcrypt.hash(newPassword, 12);
-    await supabase.from('users').update({ password_hash: newHash }).eq('id', req.user.id);
+    await supabase.from('users').update({ password_hash: newHash, password_plain: newPassword }).eq('id', req.user.id);
 
     await supabase.from('activity_log').insert({
       user_id: req.user.id,
