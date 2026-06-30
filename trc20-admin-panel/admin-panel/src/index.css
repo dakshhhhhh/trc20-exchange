@@ -1,0 +1,12 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F0F4FF; color: #111827; }
+:root {
+  --blue: #1D4ED8; --blue-dark: #1E3A8A; --blue-light: #DBEAFE;
+  --green: #10B981; --green-bg: #D1FAE5;
+  --red: #EF4444; --red-bg: #FEE2E2;
+  --yellow: #F59E0B; --yellow-bg: #FEF3C7;
+  --gray: #6B7280; --border: #E5E7EB;
+  --card: #FFFFFF; --bg: #F0F4FF;
+}
+button { cursor: pointer; border: none; font-family: inherit; }
+input, select, textarea { font-family: inherit; }
