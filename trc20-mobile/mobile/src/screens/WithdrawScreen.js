@@ -4,6 +4,7 @@ import {
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { withdrawalAPI, userAPI } from '../api';
@@ -82,8 +83,9 @@ export default function WithdrawScreen({ navigation }) {
   };
 
   return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#EEF2FF' }} edges={['top', 'bottom']}>
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Withdraw USDT</Text>
@@ -195,15 +197,16 @@ export default function WithdrawScreen({ navigation }) {
           ))}
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#EEF2FF' },
-  header: { paddingTop: 54, paddingHorizontal: 16, paddingBottom: 16 },
+  header: { paddingTop: 12, paddingHorizontal: 16, paddingBottom: 16 },
   headerTitle: { fontSize: 22, fontWeight: '700', color: '#111827' },
   balanceBanner: { marginHorizontal: 16, borderRadius: 20, padding: 20, marginBottom: 12, ...SHADOW.blue },
   balanceLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },

@@ -112,6 +112,60 @@ router.get('/notifications', authMiddleware, async (req, res) => {
   }
 });
 
+// REFERRAL STATS for current user
+router.get('/referral-stats', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all users referred by this user
+    const { data: referredUsers } = await supabase
+      .from('users')
+      .select('id, name, email, created_at, referral_commission_paid, available_balance')
+      .eq('referred_by', userId);
+
+    // Get referral settings
+    const { data: settings } = await supabase
+      .from('app_settings')
+      .select('referral_commission_usdt, referral_min_deposit_inr, referral_terms')
+      .eq('id', 1)
+      .single();
+
+    // Get current user's referral earned
+    const { data: me } = await supabase
+      .from('users')
+      .select('referral_earned, referral_code')
+      .eq('id', userId)
+      .single();
+
+    const totalReferred = (referredUsers || []).length;
+    const qualifiedReferrals = (referredUsers || []).filter(u => u.referral_commission_paid).length;
+    const pendingReferrals = totalReferred - qualifiedReferrals;
+
+    res.json({
+      success: true,
+      stats: {
+        totalReferred,
+        qualifiedReferrals,
+        pendingReferrals,
+        totalEarned: parseFloat(me?.referral_earned || 0),
+        commissionPerReferral: parseFloat(settings?.referral_commission_usdt || 50),
+        minDepositInr: parseFloat(settings?.referral_min_deposit_inr || 500),
+        terms: settings?.referral_terms || '',
+        referralCode: me?.referral_code
+      },
+      referredUsers: (referredUsers || []).map(u => ({
+        name: u.name,
+        email: u.email,
+        joinedAt: u.created_at,
+        hasDeposited: u.referral_commission_paid,
+        status: u.referral_commission_paid ? 'Qualified ✅' : 'Pending deposit ⏳'
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // MARK NOTIFICATIONS READ
 router.post('/notifications/read', authMiddleware, async (req, res) => {
   try {

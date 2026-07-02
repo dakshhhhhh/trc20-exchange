@@ -147,7 +147,11 @@ function Sidebar() {
 // ── OVERVIEW ──────────────────────────────────────────────────
 function Overview() {
   const [d, setD] = useState(null);
-  useEffect(() => { getDash(); }, []);
+  useEffect(() => {
+    getDash();
+    const interval = setInterval(getDash, 30000); // auto-reload every 30s
+    return () => clearInterval(interval);
+  }, []);
   const getDash = async () => { try { const r = await API.getDashboard(); setD(r); } catch {} };
 
   if (!d) return <div style={{padding:32,textAlign:'center'}}>Loading...</div>;
@@ -834,11 +838,15 @@ function Settings() {
         network_fee_inr: parseFloat(s.network_fee_inr||0),
         support_whatsapp: s.support_whatsapp,
         support_telegram: s.support_telegram,
+        telegram_support: s.telegram_support,
         is_maintenance: s.is_maintenance,
         maintenance_message: s.maintenance_message,
         pause_deposits: s.pause_deposits,
         pause_withdrawals: s.pause_withdrawals,
-        admin_upi_id: s.admin_upi_id
+        admin_upi_id: s.admin_upi_id,
+        referral_commission_usdt: parseFloat(s.referral_commission_usdt||50),
+        referral_min_deposit_inr: parseFloat(s.referral_min_deposit_inr||500),
+        referral_terms: s.referral_terms||''
       });
       alert('Settings saved!');
     } catch(e) { alert(e.message); }
@@ -939,9 +947,23 @@ function Settings() {
         </Card>
 
         <Card>
-          <h3 style={{fontSize:16,fontWeight:700,marginBottom:18}}>📞 Support Links</h3>
-          <F label="WhatsApp Support Number" field="support_whatsapp" />
-          <F label="Telegram Username/Link" field="support_telegram" />
+          <h3 style={{fontSize:16,fontWeight:700,marginBottom:18}}>🎁 Referral System</h3>
+          <F label="Commission per Referral (USDT) — credited on referred user's first deposit" field="referral_commission_usdt" type="number" />
+          <F label="Minimum Deposit for Referral to Qualify (₹ INR)" field="referral_min_deposit_inr" type="number" />
+          <div style={{marginBottom:14}}>
+            <label style={{display:'block',fontSize:13,fontWeight:600,color:'#374151',marginBottom:5}}>Referral Terms & Conditions (shown to users)</label>
+            <textarea value={s.referral_terms||''} onChange={e=>setS(p=>({...p,referral_terms:e.target.value}))} rows={4}
+              style={{width:'100%',padding:'9px 13px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:14,resize:'vertical',boxSizing:'border-box'}} />
+          </div>
+          <div style={{background:'#EFF6FF',borderRadius:10,padding:12,fontSize:13,color:'#1E40AF'}}>
+            💡 Commission is only paid ONCE per referred user — on their first approved deposit. Automatically tracked.
+          </div>
+        </Card>
+
+        <Card>
+          <h3 style={{fontSize:16,fontWeight:700,marginBottom:18}}>💬 Support Links</h3>
+          <F label="Telegram Support (username or full link)" field="telegram_support" />
+          <F label="WhatsApp Support Number (optional)" field="support_whatsapp" />
         </Card>
       </div>
 

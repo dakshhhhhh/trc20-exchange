@@ -59,3 +59,7 @@ export const withdrawalAPI = {
 };
 
 export default apiCall;
+
+export const referralAPI = {
+  getStats: (token) => apiCall('/api/user/referral-stats', 'GET', null, token),
+};

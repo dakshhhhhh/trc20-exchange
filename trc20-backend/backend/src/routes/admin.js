@@ -316,21 +316,28 @@ router.post('/purchases/:orderId/approve', adminMiddleware, async (req, res) => 
 
     const { data: order } = await supabase
       .from('purchase_orders')
-      .select('*, users(available_balance)')
+      .select('*, users(available_balance, referred_by, name, referral_commission_paid, referral_earned)')
       .eq('id', orderId)
       .single();
 
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
     if (order.status === 'approved') return res.status(400).json({ success: false, message: 'Already approved' });
 
+    // Check if this is user's FIRST approved purchase (before we approve this one)
+    const { count: priorApproved } = await supabase
+      .from('purchase_orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', order.user_id)
+      .eq('status', 'approved');
+
+    const isFirstDeposit = (priorApproved || 0) === 0;
+
     // Credit USDT to user
     const newBalance = parseFloat(order.users.available_balance) + parseFloat(order.amount_usdt);
-    
+
     await Promise.all([
       supabase.from('purchase_orders').update({
-        status: 'approved',
-        admin_note: note,
-        approved_at: new Date().toISOString()
+        status: 'approved', admin_note: note, approved_at: new Date().toISOString()
       }).eq('id', orderId),
       supabase.from('users').update({ available_balance: newBalance }).eq('id', order.user_id),
       supabase.from('notifications').insert({
@@ -345,8 +352,57 @@ router.post('/purchases/:orderId/approve', adminMiddleware, async (req, res) => 
       })
     ]);
 
+    // ── REFERRAL COMMISSION ──
+    // Only grant commission on user's FIRST ever approved deposit
+    if (isFirstDeposit && order.users.referred_by && !order.users.referral_commission_paid) {
+      try {
+        const [{ data: referrerData }, { data: settingsData }] = await Promise.all([
+          supabase.from('users').select('available_balance, referral_earned, name').eq('id', order.users.referred_by).single(),
+          supabase.from('app_settings').select('referral_commission_usdt').eq('id', 1).single()
+        ]);
+
+        if (referrerData) {
+          const commission = parseFloat(settingsData?.referral_commission_usdt || 50);
+          const referrerNewBal = parseFloat(referrerData.available_balance) + commission;
+          const referrerNewEarned = parseFloat(referrerData.referral_earned || 0) + commission;
+
+          await Promise.all([
+            // Credit referrer
+            supabase.from('users').update({
+              available_balance: referrerNewBal,
+              referral_earned: referrerNewEarned
+            }).eq('id', order.users.referred_by),
+
+            // Mark this user's referral as paid (so we don't double-pay)
+            supabase.from('users').update({ referral_commission_paid: true }).eq('id', order.user_id),
+
+            // Record in balance adjustments for audit
+            supabase.from('balance_adjustments').insert({
+              user_id: order.users.referred_by,
+              amount: commission,
+              reason: `Referral commission — ${order.users.name} made first deposit`,
+              balance_before: parseFloat(referrerData.available_balance),
+              balance_after: referrerNewBal
+            }),
+
+            // Notify referrer
+            supabase.from('notifications').insert({
+              user_id: order.users.referred_by,
+              title: '🎁 Referral Commission Earned!',
+              message: `${order.users.name} made their first deposit! You earned ${commission} USDT referral commission.`,
+              type: 'success'
+            })
+          ]);
+        }
+      } catch (refErr) {
+        console.error('Referral commission error:', refErr);
+        // Don't fail the approval if referral commission fails
+      }
+    }
+
     res.json({ success: true, message: 'Purchase approved and USDT credited' });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

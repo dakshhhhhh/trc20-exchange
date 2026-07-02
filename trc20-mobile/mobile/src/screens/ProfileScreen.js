@@ -1,33 +1,42 @@
 import React, { useState, useCallback } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Clipboard
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Clipboard, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { userAPI } from '../api';
+import { userAPI, settingsAPI } from '../api';
 import { SHADOW } from '../utils/theme';
 
 export default function ProfileScreen({ navigation }) {
   const { user, token, logout } = useAuth();
   const [dashboard, setDashboard] = useState(null);
+  const [telegramLink, setTelegramLink] = useState('');
 
   useFocusEffect(useCallback(() => {
     (async () => {
       try {
-        const data = await userAPI.getDashboard(token);
-        if (data.success) setDashboard(data.data);
+        const [dData, sData] = await Promise.all([
+          userAPI.getDashboard(token),
+          settingsAPI.getSettings()
+        ]);
+        if (dData.success) setDashboard(dData.data);
+        if (sData.success) setTelegramLink(sData.settings?.telegram_support || sData.settings?.support_telegram || '');
       } catch {}
     })();
   }, []));
 
   const stats = dashboard?.stats || {};
-  const settings = dashboard?.settings || {};
   const freeLeft = stats.freeWithdrawalsRemaining ?? 3;
 
   const copyToClipboard = (text, label) => {
     Clipboard.setString(text);
     Alert.alert('Copied!', `${label} copied to clipboard`);
+  };
+
+  const openTelegram = () => {
+    if (!telegramLink) { Alert.alert('Support', 'Contact admin for support.'); return; }
+    const url = telegramLink.startsWith('http') ? telegramLink : `https://t.me/${telegramLink.replace('@', '')}`;
+    Linking.openURL(url).catch(() => Alert.alert('Error', 'Could not open Telegram'));
   };
 
   const handleLogout = () => {
@@ -38,217 +47,162 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const memberSince = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
-    : '';
-
+    ? new Date(user.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '';
   const lastLogin = user?.lastLogin
-    ? new Date(user.lastLogin).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
+    ? new Date(user.lastLogin).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={styles.topBar}>
-        <View style={styles.logoRow}>
-          <View style={styles.logoBox}><Text style={styles.logoIcon}>⟨⟩</Text></View>
-          <Text style={styles.logoText}>TRC20</Text>
-        </View>
-        <View style={styles.topBarActions}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Text style={{ fontSize: 18 }}>💬</Text>
-          </TouchableOpacity>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#EEF2FF' }} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Top Bar — NO chat icon */}
+        <View style={styles.topBar}>
+          <View style={styles.logoRow}>
+            <View style={styles.logoBox}><Text style={styles.logoIcon}>⟨⟩</Text></View>
+            <Text style={styles.logoText}>TRC20</Text>
+          </View>
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
             <Text style={{ fontSize: 18 }}>🔔</Text>
-            <View style={styles.badge}><Text style={styles.badgeText}>1</Text></View>
+            <View style={styles.badge}><Text style={styles.badgeText}>•</Text></View>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Profile Card */}
-      <LinearGradient colors={['#1E3A8A', '#1D4ED8', '#2563EB']} style={styles.profileCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <View style={styles.avatarRow}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user?.name || 'User'}</Text>
-            <Text style={styles.profileEmail}>{user?.email || ''}</Text>
-            <View style={styles.phoneRow}>
-              <Text style={styles.phoneIcon}>📞</Text>
-              <Text style={styles.profilePhone}>{user?.phone || ''}</Text>
+        {/* Profile Card */}
+        <LinearGradient colors={['#1E3A8A', '#1D4ED8', '#2563EB']} style={styles.profileCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+          <View style={styles.avatarRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{user?.name || 'User'}</Text>
+              <Text style={styles.profileEmail}>{user?.email || ''}</Text>
+              <View style={styles.phoneRow}>
+                <Text style={styles.phoneIcon}>📞</Text>
+                <Text style={styles.profilePhone}>{user?.phone || ''}</Text>
+              </View>
             </View>
           </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.statusRow}>
-          <View style={styles.activeIndicator} />
-          <Text style={styles.activeText}>Account active</Text>
-          <Text style={styles.memberSince}>  Member since {memberSince}</Text>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.userIdRow}>
-          <View>
-            <Text style={styles.userIdLabel}>USER ID</Text>
-            <Text style={styles.userId}>{user?.userCode || ''}</Text>
+          <View style={styles.divider} />
+          <View style={styles.statusRow}>
+            <View style={styles.activeIndicator} />
+            <Text style={styles.activeText}>Account active</Text>
+            <Text style={styles.memberSince}>  ·  Member since {memberSince}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.copyBtn}
-            onPress={() => copyToClipboard(user?.userCode || '', 'User ID')}
-          >
-            <Text style={styles.copyBtnText}>⎘ Copy</Text>
+          <View style={styles.divider} />
+          <View style={styles.userIdRow}>
+            <View>
+              <Text style={styles.userIdLabel}>USER ID</Text>
+              <Text style={styles.userId}>{user?.userCode || ''}</Text>
+            </View>
+            <TouchableOpacity style={styles.copyBtn} onPress={() => copyToClipboard(user?.userCode || '', 'User ID')}>
+              <Text style={styles.copyBtnText}>⎘ Copy</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          {[
+            { icon: '💳', value: `$${parseFloat(stats.availableBalance || 0).toFixed(2)}`, label: 'Available balance' },
+            { icon: '↓', value: `$${parseFloat(stats.pendingPurchases || 0).toFixed(2)}`, label: 'Pending purchases' },
+            { icon: '↑', value: `$${parseFloat(stats.pendingWithdrawals || 0).toFixed(2)}`, label: 'Pending withdrawals' },
+            { icon: '🎁', value: `${parseFloat(user?.referralEarned || 0).toFixed(0)} USDT`, label: 'Referral earned' },
+          ].map((s, i) => (
+            <View key={i} style={styles.statCard}>
+              <Text style={styles.statIcon}>{s.icon}</Text>
+              <Text style={styles.statValue}>{s.value}</Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Free Withdrawals Banner */}
+        <View style={styles.freeBanner}>
+          <Text style={styles.freeBannerIcon}>🎁</Text>
+          <View>
+            <Text style={styles.freeBannerTitle}>{freeLeft} free withdrawals remaining</Text>
+            <Text style={styles.freeBannerSub}>Your first {dashboard?.settings?.freeWithdrawalsCount || 3} withdrawals carry no network fee.</Text>
+          </View>
+        </View>
+
+        {/* Order History */}
+        <Text style={styles.sectionTitle}>ORDER HISTORY</Text>
+        <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Orders')}>
+            <View style={[styles.menuItemIcon, { backgroundColor: '#ECFDF5' }]}><Text style={{ fontSize: 18 }}>↓</Text></View>
+            <Text style={styles.menuItemText}>Purchase history</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
+          <View style={styles.menuDivider} />
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Orders')}>
+            <View style={[styles.menuItemIcon, { backgroundColor: '#FEF3C7' }]}><Text style={{ fontSize: 18 }}>↑</Text></View>
+            <Text style={styles.menuItemText}>Withdrawal history</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
           </TouchableOpacity>
         </View>
-      </LinearGradient>
 
-      {/* Stats Grid */}
-      <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <Text style={styles.statIcon}>💳</Text>
-          <Text style={styles.statValue}>${parseFloat(stats.availableBalance || 0).toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Available balance</Text>
+        {/* Referral Card */}
+        <LinearGradient colors={['#1E3A8A', '#1D4ED8', '#3B82F6']} style={styles.referralCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <Text style={styles.referralTag}>REFER & EARN</Text>
+          <Text style={styles.referralTitle}>Invite friends, earn USDT</Text>
+          <Text style={styles.referralSub}>
+            You've earned <Text style={styles.referralBold}>{parseFloat(user?.referralEarned || 0).toFixed(0)} USDT</Text> from referrals so far.
+          </Text>
+          <TouchableOpacity style={styles.referralCodeBox} onPress={() => copyToClipboard(user?.referralCode || '', 'Referral code')}>
+            <Text style={styles.referralCodeLabel}>CODE  </Text>
+            <Text style={styles.referralCode}>{user?.referralCode || ''}</Text>
+          </TouchableOpacity>
+          {/* Referral Hub button — WORKING now */}
+          <TouchableOpacity onPress={() => navigation.navigate('Referral')}>
+            <Text style={styles.referralHubLink}>Open Referral Hub →</Text>
+          </TouchableOpacity>
+        </LinearGradient>
+
+        {/* Security */}
+        <Text style={styles.sectionTitle}>SECURITY</Text>
+        <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('ChangePassword')}>
+            <View style={[styles.menuItemIcon, { backgroundColor: '#FEF3C7' }]}><Text style={{ fontSize: 18 }}>🔒</Text></View>
+            <Text style={styles.menuItemText}>Change Password</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statIcon}>↓</Text>
-          <Text style={styles.statValue}>${parseFloat(stats.pendingPurchases || 0).toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Pending purchases</Text>
+
+        {/* Support — ONLY Telegram, no WhatsApp */}
+        <Text style={styles.sectionTitle}>SUPPORT</Text>
+        <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.menuItem} onPress={openTelegram}>
+            <View style={[styles.menuItemIcon, { backgroundColor: '#EFF6FF' }]}><Text style={{ fontSize: 18 }}>✈️</Text></View>
+            <Text style={styles.menuItemText}>Telegram Support</Text>
+            <Text style={styles.menuItemArrow}>›</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statIcon}>↑</Text>
-          <Text style={styles.statValue}>${parseFloat(stats.pendingWithdrawals || 0).toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Pending withdrawals</Text>
+
+        {/* Sign Out */}
+        <TouchableOpacity style={styles.signOutBtn} onPress={handleLogout} activeOpacity={0.8}>
+          <Text style={styles.signOutText}>→  Sign Out</Text>
+        </TouchableOpacity>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>TRC20.IN · Version 2.0 · Secure Session</Text>
+          <Text style={styles.footerText}>UID: {user?.userCode}  ·  Last login: {lastLogin}</Text>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statIcon}>🎁</Text>
-          <Text style={styles.statValue}>{parseFloat(user?.referralEarned || 0).toFixed(0)} USDT</Text>
-          <Text style={styles.statLabel}>Referral earned</Text>
-        </View>
-      </View>
 
-      {/* Free Withdrawals Banner */}
-      <View style={styles.freeBanner}>
-        <Text style={styles.freeBannerIcon}>🎁</Text>
-        <View>
-          <Text style={styles.freeBannerTitle}>{freeLeft} free withdrawals remaining</Text>
-          <Text style={styles.freeBannerSub}>Your first {dashboard?.settings?.freeWithdrawalsCount || 3} withdrawals carry no network fee.</Text>
-        </View>
-      </View>
-
-      {/* Order History */}
-      <Text style={styles.sectionTitle}>ORDER HISTORY</Text>
-      <View style={styles.menuCard}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('Orders'); }}>
-          <View style={[styles.menuItemIcon, { backgroundColor: '#ECFDF5' }]}>
-            <Text style={{ fontSize: 18 }}>↓</Text>
-          </View>
-          <Text style={styles.menuItemText}>Purchase history</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
-        </TouchableOpacity>
-        <View style={styles.menuDivider} />
-        <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('Orders'); }}>
-          <View style={[styles.menuItemIcon, { backgroundColor: '#FEF3C7' }]}>
-            <Text style={{ fontSize: 18 }}>↑</Text>
-          </View>
-          <Text style={styles.menuItemText}>Withdrawal history</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Referral Card */}
-      <LinearGradient colors={['#1E3A8A', '#1D4ED8', '#3B82F6']} style={styles.referralCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-        <Text style={styles.referralTag}>REFER & EARN</Text>
-        <Text style={styles.referralTitle}>Invite friends, earn USDT</Text>
-        <Text style={styles.referralSub}>
-          You've earned <Text style={styles.referralBold}>{parseFloat(user?.referralEarned || 0).toFixed(0)} USDT</Text> from 0 active referrals so far.
-        </Text>
-        <TouchableOpacity
-          style={styles.referralCodeBox}
-          onPress={() => copyToClipboard(user?.referralCode || '', 'Referral code')}
-        >
-          <Text style={styles.referralCodeLabel}>CODE  </Text>
-          <Text style={styles.referralCode}>{user?.referralCode || ''}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <Text style={styles.referralHubLink}>Open Referral Hub →</Text>
-        </TouchableOpacity>
-      </LinearGradient>
-
-      {/* Security */}
-      <Text style={styles.sectionTitle}>SECURITY</Text>
-      <View style={styles.menuCard}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('ChangePassword')}>
-          <View style={[styles.menuItemIcon, { backgroundColor: '#FEF3C7' }]}>
-            <Text style={{ fontSize: 18 }}>🔒</Text>
-          </View>
-          <Text style={styles.menuItemText}>Change Password</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Support */}
-      <Text style={styles.sectionTitle}>SUPPORT</Text>
-      <View style={styles.menuCard}>
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={[styles.menuItemIcon, { backgroundColor: '#ECFDF5' }]}>
-            <Text style={{ fontSize: 18 }}>💬</Text>
-          </View>
-          <Text style={styles.menuItemText}>WhatsApp Support</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
-        </TouchableOpacity>
-        <View style={styles.menuDivider} />
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={[styles.menuItemIcon, { backgroundColor: '#EFF6FF' }]}>
-            <Text style={{ fontSize: 18 }}>✈️</Text>
-          </View>
-          <Text style={styles.menuItemText}>Telegram Support</Text>
-          <Text style={styles.menuItemArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* App */}
-      <Text style={styles.sectionTitle}>APP</Text>
-      <View style={styles.menuCard}>
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={[styles.menuItemIcon, { backgroundColor: '#EFF6FF' }]}>
-            <Text style={{ fontSize: 18 }}>📲</Text>
-          </View>
-          <Text style={styles.menuItemText}>Install TRC20.IN App</Text>
-          <View style={styles.installBtn}>
-            <Text style={styles.installBtnText}>↓ Install App</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Sign Out */}
-      <TouchableOpacity style={styles.signOutBtn} onPress={handleLogout} activeOpacity={0.8}>
-        <Text style={styles.signOutText}>→  Sign Out</Text>
-      </TouchableOpacity>
-
-      {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>TRC20.IN · Version 2.0 · Secure Session</Text>
-        <Text style={styles.footerText}>UID: {user?.userCode}  ·  Last login: {lastLogin}</Text>
-      </View>
-
-      <View style={{ height: 100 }} />
-    </ScrollView>
+        <View style={{ height: 30 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#EEF2FF' },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 54, paddingHorizontal: 16, paddingBottom: 12 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#1D4ED8', justifyContent: 'center', alignItems: 'center' },
   logoIcon: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
   logoText: { fontSize: 20, fontWeight: '700', color: '#1D4ED8' },
-  topBarActions: { flexDirection: 'row', gap: 8 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', ...SHADOW.sm, position: 'relative' },
-  badge: { position: 'absolute', top: 4, right: 4, width: 14, height: 14, borderRadius: 7, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center' },
-  badgeText: { color: '#FFF', fontSize: 8, fontWeight: '700' },
+  badge: { position: 'absolute', top: 4, right: 4, width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center' },
+  badgeText: { color: '#FFF', fontSize: 6, fontWeight: '700' },
   profileCard: { marginHorizontal: 16, borderRadius: 20, padding: 20, marginBottom: 12, ...SHADOW.blue },
   avatarRow: { flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 16 },
   avatar: { width: 60, height: 60, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
@@ -285,8 +239,6 @@ const styles = StyleSheet.create({
   menuItemText: { flex: 1, fontSize: 15, fontWeight: '500', color: '#111827' },
   menuItemArrow: { fontSize: 20, color: '#9CA3AF' },
   menuDivider: { height: 1, backgroundColor: '#F9FAFB', marginHorizontal: 14 },
-  installBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1.5, borderColor: '#DBEAFE' },
-  installBtnText: { color: '#1D4ED8', fontSize: 12, fontWeight: '600' },
   referralCard: { marginHorizontal: 16, borderRadius: 18, padding: 20, marginBottom: 12, ...SHADOW.blue },
   referralTag: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.6)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
   referralTitle: { fontSize: 20, fontWeight: '700', color: '#FFF', marginBottom: 6 },
