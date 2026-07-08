@@ -7,6 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, SPACING, RADIUS, SHADOW } from '../utils/theme';
+import AppLogo from '../components/AppLogo';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -53,12 +54,7 @@ export default function LoginScreen({ navigation }) {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <View style={styles.logoContainer}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoArrow}>⟨⟩</Text>
-            </View>
-            <Text style={styles.logoText}>TRC20</Text>
-          </View>
+          <AppLogo size="lg" variant="light" />
           <Text style={styles.headerSubtitle}>Buy & Sell USDT with UPI</Text>
         </LinearGradient>
 

@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "TRC20",
+    "name": "CRYPTO",
     "slug": "trc20-exchange",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#1E3A8A"
     },
@@ -23,23 +23,9 @@
       },
       "package": "com.trc20.exchange",
       "versionCode": 1,
-      "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "CAMERA"
-      ]
+      "permissions": ["READ_EXTERNAL_STORAGE","WRITE_EXTERNAL_STORAGE","CAMERA"]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "TRC20 needs access to your photos to upload payment proof.",
-          "cameraPermission": "TRC20 needs access to your camera to capture payment proof."
-        }
-      ]
-    ]
+    "web": { "favicon": "./assets/favicon.png" },
+    "plugins": [["expo-image-picker",{"photosPermission":"CRYPTO needs access to your photos to upload payment proof.","cameraPermission":"CRYPTO needs access to your camera to capture payment proof."}]]
   }
 }

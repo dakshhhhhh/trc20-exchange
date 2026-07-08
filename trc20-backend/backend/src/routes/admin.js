@@ -720,20 +720,163 @@ router.get('/users/export/all', adminMiddleware, async (req, res) => {
   }
 });
 
-// CLEAR OLD DATA (rejected/expired orders older than 30 days)
-router.post('/clear-old-data', adminMiddleware, async (req, res) => {
+// BULK APPROVE PURCHASES
+router.post('/purchases/bulk-approve', adminMiddleware, async (req, res) => {
   try {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { orderIds, note = '' } = req.body;
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'No orders provided' });
+    }
+    const results = { approved: [], failed: [], skipped: [] };
+    const { data: settings } = await supabase.from('app_settings').select('referral_commission_usdt, referral_min_deposit_inr').eq('id', 1).single();
 
-    const [{ count: c1 }, { count: c2 }] = await Promise.all([
-      supabase.from('purchase_orders').delete({ count: 'exact' }).in('status', ['rejected', 'expired']).lt('created_at', cutoff),
-      supabase.from('withdrawal_orders').delete({ count: 'exact' }).eq('status', 'rejected').lt('created_at', cutoff)
+    for (const orderId of orderIds) {
+      try {
+        const { data: order } = await supabase
+          .from('purchase_orders')
+          .select('*, users(available_balance, referred_by, name, referral_commission_paid, referral_earned)')
+          .eq('id', orderId).single();
+        if (!order || order.status === 'approved') { results.skipped.push(orderId); continue; }
+        if (!['pending', 'processing'].includes(order.status)) { results.skipped.push(orderId); continue; }
+
+        const { count: priorApproved } = await supabase.from('purchase_orders').select('*', { count: 'exact', head: true }).eq('user_id', order.user_id).eq('status', 'approved');
+        const isFirstDeposit = (priorApproved || 0) === 0;
+        const newBalance = parseFloat(order.users.available_balance) + parseFloat(order.amount_usdt);
+
+        await Promise.all([
+          supabase.from('purchase_orders').update({ status: 'approved', admin_note: note, approved_at: new Date().toISOString() }).eq('id', orderId),
+          supabase.from('users').update({ available_balance: newBalance }).eq('id', order.user_id),
+          supabase.from('notifications').insert({ user_id: order.user_id, title: '✅ Purchase Approved!', message: `Your purchase of ${parseFloat(order.amount_usdt).toFixed(2)} USDT has been approved and credited.`, type: 'success' })
+        ]);
+
+        // Referral commission check
+        if (isFirstDeposit && order.users.referred_by && !order.users.referral_commission_paid) {
+          const minDeposit = parseFloat(settings?.referral_min_deposit_inr || 10000);
+          if (parseFloat(order.amount_inr) >= minDeposit) {
+            const { data: referrerData } = await supabase.from('users').select('available_balance, referral_earned').eq('id', order.users.referred_by).single();
+            if (referrerData) {
+              const commission = parseFloat(settings?.referral_commission_usdt || 5);
+              await Promise.all([
+                supabase.from('users').update({ available_balance: parseFloat(referrerData.available_balance) + commission, referral_earned: parseFloat(referrerData.referral_earned || 0) + commission }).eq('id', order.users.referred_by),
+                supabase.from('users').update({ referral_commission_paid: true }).eq('id', order.user_id),
+                supabase.from('balance_adjustments').insert({ user_id: order.users.referred_by, amount: commission, reason: `Referral commission — ${order.users.name}'s first deposit`, balance_before: parseFloat(referrerData.available_balance), balance_after: parseFloat(referrerData.available_balance) + commission }),
+                supabase.from('notifications').insert({ user_id: order.users.referred_by, title: '🎁 Referral Commission!', message: `${order.users.name} made their first deposit! You earned ${commission} USDT.`, type: 'success' })
+              ]);
+            }
+          }
+        }
+        results.approved.push(orderId);
+      } catch (err) { console.error('Bulk approve item error:', err); results.failed.push(orderId); }
+    }
+    res.json({ success: true, results, message: `Approved ${results.approved.length}, Skipped ${results.skipped.length}, Failed ${results.failed.length}` });
+  } catch (err) { res.status(500).json({ success: false, message: 'Server error' }); }
+});
+
+// ANALYTICS
+router.get('/analytics', adminMiddleware, async (req, res) => {
+  try {
+    const { period = '30d', from, to } = req.query;
+    let fromDate = new Date(), toDate = new Date();
+    toDate.setHours(23, 59, 59, 999);
+    if (from && to) {
+      fromDate = new Date(from); toDate = new Date(to); toDate.setHours(23, 59, 59, 999);
+    } else {
+      const days = period === '1d' ? 1 : period === '7d' ? 7 : period === '90d' ? 90 : 30;
+      fromDate.setDate(fromDate.getDate() - days); fromDate.setHours(0, 0, 0, 0);
+    }
+    const fromISO = fromDate.toISOString(), toISO = toDate.toISOString();
+
+    const [{ data: purchases }, { data: withdrawals }, { data: newUsers }, { data: allUsers }, { data: commissions }] = await Promise.all([
+      supabase.from('purchase_orders').select('id,amount_inr,amount_usdt,status,created_at,rate_used,user_id,users(name,email,phone,user_code)').gte('created_at', fromISO).lte('created_at', toISO).order('created_at'),
+      supabase.from('withdrawal_orders').select('id,amount_usdt,amount_after_fee,fee_usdt,status,created_at,user_id,users(name,email,phone,user_code)').gte('created_at', fromISO).lte('created_at', toISO).order('created_at'),
+      supabase.from('users').select('id,name,email,created_at').gte('created_at', fromISO).lte('created_at', toISO),
+      supabase.from('users').select('id,available_balance'),
+      supabase.from('balance_adjustments').select('user_id,amount,created_at,reason').gte('created_at', fromISO).lte('created_at', toISO)
     ]);
 
-    res.json({ success: true, message: `Cleared old data`, deletedPurchases: c1 || 0, deletedWithdrawals: c2 || 0 });
-  } catch (err) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
+    const approved = (purchases||[]).filter(p => p.status==='approved');
+    const approvedW = (withdrawals||[]).filter(w => w.status==='approved');
+    const refCommissions = (commissions||[]).filter(c => c.reason?.includes('Referral'));
+
+    const totalRevenue = approved.reduce((s,p) => s+parseFloat(p.amount_inr),0);
+    const totalUsdtSold = approved.reduce((s,p) => s+parseFloat(p.amount_usdt),0);
+    const totalWithdrawn = approvedW.reduce((s,w) => s+parseFloat(w.amount_after_fee),0);
+    const totalFees = approvedW.reduce((s,w) => s+parseFloat(w.fee_usdt||0),0);
+    const totalCommission = refCommissions.reduce((s,c) => s+parseFloat(c.amount),0);
+    const platformLiability = (allUsers||[]).reduce((s,u) => s+parseFloat(u.available_balance||0),0);
+
+    // Daily grouping
+    const dateMap = {};
+    const gd = d => d.split('T')[0];
+    (purchases||[]).forEach(p => {
+      const d = gd(p.created_at);
+      if (!dateMap[d]) dateMap[d] = { date:d, depositsInr:0, depositsUsdt:0, depositsCount:0, withdrawalsUsdt:0, withdrawalsCount:0, newUsers:0, approvedD:0, rejectedD:0, pendingD:0 };
+      dateMap[d].depositsCount++;
+      if (p.status==='approved') { dateMap[d].depositsInr+=parseFloat(p.amount_inr); dateMap[d].depositsUsdt+=parseFloat(p.amount_usdt); dateMap[d].approvedD++; }
+      if (p.status==='rejected') dateMap[d].rejectedD++;
+      if (['pending','processing'].includes(p.status)) dateMap[d].pendingD++;
+    });
+    (withdrawals||[]).forEach(w => {
+      const d = gd(w.created_at);
+      if (!dateMap[d]) dateMap[d] = { date:d, depositsInr:0, depositsUsdt:0, depositsCount:0, withdrawalsUsdt:0, withdrawalsCount:0, newUsers:0, approvedD:0, rejectedD:0, pendingD:0 };
+      dateMap[d].withdrawalsCount++;
+      if (w.status==='approved') dateMap[d].withdrawalsUsdt+=parseFloat(w.amount_after_fee);
+    });
+    (newUsers||[]).forEach(u => {
+      const d = gd(u.created_at);
+      if (!dateMap[d]) dateMap[d] = { date:d, depositsInr:0, depositsUsdt:0, depositsCount:0, withdrawalsUsdt:0, withdrawalsCount:0, newUsers:0, approvedD:0, rejectedD:0, pendingD:0 };
+      dateMap[d].newUsers++;
+    });
+    const dailyData = Object.values(dateMap).sort((a,b) => a.date.localeCompare(b.date));
+
+    // Top users
+    const umap = {};
+    approved.forEach(p => {
+      if (!umap[p.user_id]) umap[p.user_id] = { user:p.users, totalInr:0, totalUsdt:0, count:0 };
+      umap[p.user_id].totalInr+=parseFloat(p.amount_inr); umap[p.user_id].totalUsdt+=parseFloat(p.amount_usdt); umap[p.user_id].count++;
+    });
+    const topUsers = Object.values(umap).sort((a,b) => b.totalInr-a.totalInr).slice(0,10);
+
+    res.json({
+      success: true,
+      period: { from: fromISO, to: toISO },
+      summary: { totalRevenue, totalUsdtSold, totalWithdrawn, totalFees, totalCommission, platformLiability, newUsersCount:(newUsers||[]).length, totalDeposits:(purchases||[]).length, totalWithdrawalsCount:(withdrawals||[]).length, approvalRate:(purchases||[]).length>0?((approved.length/(purchases||[]).length)*100).toFixed(1):0 },
+      dailyData, topUsers,
+      statusBreakdown: {
+        purchases: { approved:approved.length, pending:(purchases||[]).filter(p=>['pending','processing'].includes(p.status)).length, rejected:(purchases||[]).filter(p=>p.status==='rejected').length, expired:(purchases||[]).filter(p=>p.status==='expired').length },
+        withdrawals: { approved:approvedW.length, pending:(withdrawals||[]).filter(w=>w.status==='pending').length, rejected:(withdrawals||[]).filter(w=>w.status==='rejected').length }
+      }
+    });
+  } catch (err) { console.error(err); res.status(500).json({ success: false, message: 'Server error' }); }
+});
+
+// REFERRALS AUDIT
+router.get('/referrals', adminMiddleware, async (req, res) => {
+  try {
+    const { search = '', status = '' } = req.query;
+    const { data: allUsers } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    const { data: commissions } = await supabase.from('balance_adjustments').select('user_id,amount,created_at,reason').like('reason', '%Referral%');
+
+    const referrersMap = {};
+    (allUsers||[]).forEach(u => { if (u.referred_by) { if (!referrersMap[u.referred_by]) referrersMap[u.referred_by] = []; referrersMap[u.referred_by].push(u); } });
+
+    let result = (allUsers||[]).filter(u => referrersMap[u.id]?.length > 0).map(u => {
+      const refs = referrersMap[u.id]||[];
+      const qualified = refs.filter(r => r.referral_commission_paid);
+      const commPaid = (commissions||[]).filter(c => c.user_id===u.id).reduce((s,c) => s+parseFloat(c.amount),0);
+      return { referrer:u, referredUsers:refs, totalReferred:refs.length, qualifiedCount:qualified.length, pendingCount:refs.length-qualified.length, totalCommissionEarned:commPaid };
+    });
+
+    if (search.trim()) { const s=search.toLowerCase(); result=result.filter(i=>i.referrer.name?.toLowerCase().includes(s)||i.referrer.email?.toLowerCase().includes(s)||i.referrer.phone?.includes(s)||i.referrer.user_code?.toLowerCase().includes(s)); }
+    if (status==='qualified') result=result.filter(i=>i.qualifiedCount>0);
+    if (status==='pending') result=result.filter(i=>i.pendingCount>0&&i.qualifiedCount===0);
+
+    const totalCommPaid=(commissions||[]).filter(c=>c.reason?.includes('Referral')).reduce((s,c)=>s+parseFloat(c.amount),0);
+    const totalReferred=(allUsers||[]).filter(u=>u.referred_by).length;
+    const totalQualified=(allUsers||[]).filter(u=>u.referral_commission_paid).length;
+
+    res.json({ success:true, referrers:result, summary:{ totalReferrers:result.length, totalReferredUsers:totalReferred, totalQualified, totalPending:totalReferred-totalQualified, totalCommissionPaid:totalCommPaid } });
+  } catch (err) { res.status(500).json({ success: false, message: 'Server error' }); }
 });
 
 module.exports = router;

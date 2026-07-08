@@ -1,6 +1,5 @@
-// ⚠️ IMPORTANT: Replace this URL with your actual Render backend URL
-// After deploying to Render, copy the URL here AND set it in .env as EXPO_PUBLIC_API_URL
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://YOUR-APP-NAME.onrender.com';
+// Your live backend URL — hardcoded so it always works regardless of .env
+const API_BASE_URL = 'https://trc20-backend.onrender.com';
 
 async function apiCall(endpoint, method = 'GET', body = null, token = null, isFormData = false) {
   const headers = {};
@@ -10,9 +9,29 @@ async function apiCall(endpoint, method = 'GET', body = null, token = null, isFo
   const config = { method, headers };
   if (body) config.body = isFormData ? body : JSON.stringify(body);
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  } catch (networkErr) {
+    // Server is sleeping (Render free tier) or no internet
+    throw new Error('Cannot reach server. It may be waking up — please wait 30 seconds and try again.');
+  }
+
+  // Check if the response is actually JSON before parsing
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    // Server returned HTML or plain text — likely a 404 or crash
+    const text = await response.text();
+    console.error('Non-JSON response:', text.substring(0, 200));
+    throw new Error('Server error. Please try again in a moment.');
+  }
+
   const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Request failed');
+
+  if (!response.ok) {
+    throw new Error(data.message || `Request failed (${response.status})`);
+  }
+
   return data;
 }
 
@@ -58,8 +77,8 @@ export const withdrawalAPI = {
     apiCall('/api/withdrawal/create', 'POST', { amountUsdt, walletAddress }, token),
 };
 
-export default apiCall;
-
 export const referralAPI = {
   getStats: (token) => apiCall('/api/user/referral-stats', 'GET', null, token),
 };
+
+export default apiCall;

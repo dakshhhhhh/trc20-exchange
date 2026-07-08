@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { userAPI, settingsAPI } from '../api';
 import { SHADOW } from '../utils/theme';
+import AppLogo from '../components/AppLogo';
 
 export default function ProfileScreen({ navigation }) {
   const { user, token, logout } = useAuth();
@@ -56,10 +57,7 @@ export default function ProfileScreen({ navigation }) {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Top Bar — NO chat icon */}
         <View style={styles.topBar}>
-          <View style={styles.logoRow}>
-            <View style={styles.logoBox}><Text style={styles.logoIcon}>⟨⟩</Text></View>
-            <Text style={styles.logoText}>TRC20</Text>
-          </View>
+          <AppLogo size="md" variant="dark" />
           <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
             <Text style={{ fontSize: 18 }}>🔔</Text>
             <View style={styles.badge}><Text style={styles.badgeText}>•</Text></View>
@@ -184,7 +182,7 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>TRC20.IN · Version 2.0 · Secure Session</Text>
+          <Text style={styles.footerText}>CRYPTO · Version 2.0 · Secure Session</Text>
           <Text style={styles.footerText}>UID: {user?.userCode}  ·  Last login: {lastLogin}</Text>
         </View>
 

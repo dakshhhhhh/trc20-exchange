@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { userAPI } from '../api';
 import { COLORS, SHADOW } from '../utils/theme';
+import AppLogo from '../components/AppLogo';
 
 export default function HomeScreen({ navigation }) {
   const { user, token } = useAuth();

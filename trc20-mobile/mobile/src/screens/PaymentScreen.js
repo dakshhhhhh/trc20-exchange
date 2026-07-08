@@ -11,11 +11,12 @@ import { useAuth } from '../context/AuthContext';
 import { ordersAPI, settingsAPI } from '../api';
 import { SHADOW } from '../utils/theme';
 
+// Real UPI app logos from assets
 const UPI_APPS = [
-  { name: 'PhonePe', emoji: 'Pe', color: '#5f259f', bg: '#EDE7F6', scheme: 'phonepe://pay' },
-  { name: 'GPay', emoji: 'G', color: '#4285F4', bg: '#E8F0FE', scheme: 'tez://upi/pay' },
-  { name: 'Paytm', emoji: 'Pay', color: '#00BAF2', bg: '#E0F7FA', scheme: 'paytmmp://pay' },
-  { name: 'BHIM', emoji: 'B', color: '#FF6B00', bg: '#FFF3E0', scheme: 'bhim://pay' },
+  { name: 'PhonePe', logo: require('../../assets/phonepe.png'), scheme: 'phonepe://' },
+  { name: 'GPay', logo: require('../../assets/gpay.png'), scheme: 'tez://' },
+  { name: 'Paytm', logo: require('../../assets/paytm.png'), scheme: 'paytmmp://' },
+  { name: 'BHIM', logo: require('../../assets/bhim.png'), scheme: 'bhim://' },
 ];
 
 export default function PaymentScreen({ route, navigation }) {
@@ -64,10 +65,14 @@ export default function PaymentScreen({ route, navigation }) {
   const bankMethods = (paymentMethods || []).filter(m => m.type === 'bank' && m.is_active);
 
   const openUpiApp = (scheme) => {
-    if (!upiId) { Alert.alert('UPI ID not set', 'Admin has not configured UPI ID yet. Please contact support.'); return; }
-    const url = `${scheme}?pa=${upiId}&pn=TRC20&am=${order.amountInr}&cu=INR&tn=TRC20-${order.orderId}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert('App not found', 'This app is not installed on your device. Please use the UPI ID directly.');
+    // Just open the UPI app — user copies UPI ID and pays manually
+    // Pre-filling amount causes risk alerts and ₹2000 limits
+    Linking.openURL(scheme).catch(() => {
+      Alert.alert(
+        'App not installed',
+        'This UPI app is not installed. Please copy the UPI ID below and use any other UPI app.',
+        [{ text: 'OK' }]
+      );
     });
   };
 
@@ -206,30 +211,35 @@ export default function PaymentScreen({ route, navigation }) {
                   <SectionHeader icon="📱" title="Pay with an app" subtitle="PhonePe, GPay, Paytm, BHIM" expanded={expandUpi} onToggle={() => setExpandUpi(!expandUpi)} />
                   {expandUpi && (
                     <View style={{ paddingTop: 14 }}>
-                      <View style={styles.upiGrid}>
-                        {UPI_APPS.map(app => (
-                          <TouchableOpacity key={app.name} style={styles.upiApp} onPress={() => openUpiApp(app.scheme)} activeOpacity={0.7}>
-                            <View style={[styles.upiIcon, { backgroundColor: app.bg }]}>
-                              <Text style={{ color: app.color, fontWeight: '800', fontSize: 13 }}>{app.emoji}</Text>
-                            </View>
-                            <Text style={styles.upiName}>{app.name}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+                      <View style={styles.upiInstructions}>
+                    <Text style={styles.upiInstructionsTitle}>How to pay:</Text>
+                    <Text style={styles.upiInstructionsText}>1. Copy the UPI ID below  2. Open any UPI app  3. Go to "Pay to UPI ID"  4. Paste UPI ID  5. Enter ₹{parseInt(order.amountInr).toLocaleString('en-IN')} and pay</Text>
+                  </View>
 
-                      {/* Other UPI App - just shows UPI ID to copy */}
-                      <View style={styles.otherUpiBox}>
-                        <Text style={styles.otherUpiLabel}>Other UPI app</Text>
-                        <Text style={styles.otherUpiHint}>Copy this UPI ID and paste it in any UPI app</Text>
-                        <View style={styles.upiIdCopyRow}>
-                          <Text style={styles.upiIdText} numberOfLines={1} selectable>{upiId || 'Not set by admin'}</Text>
-                          {upiId ? (
-                            <TouchableOpacity style={styles.copyBtnBlue} onPress={() => copyText(upiId, 'UPI ID')}>
-                              <Text style={styles.copyBtnBlueText}>Copy</Text>
-                            </TouchableOpacity>
-                          ) : null}
+                  {/* UPI ID Copy — most prominent */}
+                  <View style={styles.upiIdBigBox}>
+                    <Text style={styles.upiIdBigLabel}>UPI ID — Copy and paste in any app</Text>
+                    <View style={styles.upiIdCopyRow}>
+                      <Text style={styles.upiIdText} selectable numberOfLines={1}>{upiId || 'Not configured by admin'}</Text>
+                      {upiId ? (
+                        <TouchableOpacity style={styles.copyBtnBlue} onPress={() => copyText(upiId, 'UPI ID')}>
+                          <Text style={styles.copyBtnBlueText}>📋 Copy</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <Text style={styles.upiAppsLabel}>Quick open app (then paste UPI ID manually):</Text>
+                  <View style={styles.upiGrid}>
+                    {UPI_APPS.map(app => (
+                      <TouchableOpacity key={app.name} style={styles.upiApp} onPress={() => openUpiApp(app.scheme)} activeOpacity={0.7}>
+                        <View style={styles.upiIconWrapper}>
+                          <Image source={app.logo} style={styles.upiLogo} resizeMode="contain" />
                         </View>
-                      </View>
+                        <Text style={styles.upiName}>{app.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                     </View>
                   )}
                 </View>
@@ -392,15 +402,19 @@ const styles = StyleSheet.create({
   sectionHeaderTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
   sectionHeaderSub: { fontSize: 12, color: '#6B7280', marginTop: 1 },
   chevron: { fontSize: 18, color: '#9CA3AF', marginLeft: 'auto' },
-  upiGrid: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  upiGrid: { flexDirection: 'row', gap: 10, marginTop: 10 },
   upiApp: { flex: 1, alignItems: 'center', gap: 6 },
-  upiIcon: { width: 52, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  upiIconWrapper: { width: 56, height: 56, borderRadius: 14, backgroundColor: '#F9FAFB', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
+  upiLogo: { width: 44, height: 44 },
   upiName: { fontSize: 11, fontWeight: '600', color: '#374151' },
-  otherUpiBox: { backgroundColor: '#F8FAFF', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#DBEAFE' },
-  otherUpiLabel: { fontSize: 13, fontWeight: '700', color: '#1D4ED8', marginBottom: 2 },
-  otherUpiHint: { fontSize: 11, color: '#6B7280', marginBottom: 8 },
+  upiInstructions: { backgroundColor: '#FFFBEB', borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  upiInstructionsTitle: { fontSize: 12, fontWeight: '700', color: '#92400E', marginBottom: 4 },
+  upiInstructionsText: { fontSize: 12, color: '#78350F', lineHeight: 18 },
+  upiIdBigBox: { backgroundColor: '#EFF6FF', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1.5, borderColor: '#BFDBFE' },
+  upiIdBigLabel: { fontSize: 11, fontWeight: '700', color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   upiIdCopyRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  upiIdText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#111827', fontFamily: 'monospace' },
+  upiIdText: { flex: 1, fontSize: 16, fontWeight: '800', color: '#111827', fontFamily: 'monospace' },
+  upiAppsLabel: { fontSize: 12, color: '#6B7280', fontWeight: '600', marginBottom: 8 },
   copyBtnBlue: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, backgroundColor: '#1D4ED8' },
   copyBtnBlueText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
   qrWrapper: { width: 200, height: 200, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFF', padding: 8 },

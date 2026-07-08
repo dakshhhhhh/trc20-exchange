@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, SHADOW } from '../utils/theme';
+import AppLogo from '../components/AppLogo';
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
@@ -82,10 +83,7 @@ export default function RegisterScreen({ navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <View style={styles.logoRow}>
-            <View style={styles.logoBox}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>⟨⟩</Text></View>
-            <Text style={styles.logoText}>TRC20</Text>
-          </View>
+          <AppLogo size="md" variant="light" />
           <Text style={styles.headerSub}>Create your account</Text>
         </LinearGradient>
 
