@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1E3A8A"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.trc20.exchange"
@@ -23,9 +25,29 @@
       },
       "package": "com.trc20.exchange",
       "versionCode": 1,
-      "permissions": ["READ_EXTERNAL_STORAGE","WRITE_EXTERNAL_STORAGE","CAMERA"]
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
-    "web": { "favicon": "./assets/favicon.png" },
-    "plugins": [["expo-image-picker",{"photosPermission":"CRYPTO needs access to your photos to upload payment proof.","cameraPermission":"CRYPTO needs access to your camera to capture payment proof."}]]
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CRYPTO needs access to your photos to upload payment proof.",
+          "cameraPermission": "CRYPTO needs access to your camera to capture payment proof."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2e0122e6-9898-4cf2-824d-706136200e9e"
+      }
+    }
   }
 }

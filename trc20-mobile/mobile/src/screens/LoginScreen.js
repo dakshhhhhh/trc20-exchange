@@ -77,6 +77,9 @@ export default function LoginScreen({ navigation }) {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                textContentType="none"
+                autoComplete="off"
+                importantForAutofill="no"
               />
             </View>
             {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
@@ -95,6 +98,9 @@ export default function LoginScreen({ navigation }) {
                 onChangeText={t => { setPassword(t); setErrors(p => ({ ...p, password: null })); }}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                textContentType="none"
+                autoComplete="off"
+                importantForAutofill="no"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
                 <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
